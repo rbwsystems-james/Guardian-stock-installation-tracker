@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Pencil, Check } from 'lucide-react';
 import { SKU_CONFIG, SKU_KEYS } from './constants';
 
 export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) {
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState({});
+  const exitingRef = useRef(false);
 
   const { committed, spare, inbound } = metrics;
 
@@ -19,6 +20,7 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
   };
 
   const exitEditMode = () => {
+    exitingRef.current = true;
     // Save all changes
     SKU_KEYS.forEach(sku => {
       const sl = stockLevels.find(s => s.sku === sku) || { total: 0, built: 0 };
@@ -33,6 +35,7 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
       }
     });
     setEditing(false);
+    setTimeout(() => { exitingRef.current = false; }, 0);
   };
 
   const updateEditValue = (sku, field, value) => {
@@ -42,7 +45,10 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
     }));
   };
 
-  const handleFieldSave = (sku, field) => {
+  const handleFieldSave = (sku) => {
+    // Skip blur saves when exiting — exitEditMode handles the final save
+    if (exitingRef.current) return;
+
     const sl = stockLevels.find(s => s.sku === sku) || { total: 0, built: 0 };
     const vals = editValues[sku];
     if (!vals) return;
@@ -55,17 +61,9 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
       updateEditValue(sku, 'built', String(newBuilt));
     }
 
-    const updates = {};
-    if (field === 'total' && newTotal !== sl.total) {
-      updates.total = newTotal;
-      if (sl.built > newTotal) updates.built = newTotal;
-    }
-    if (field === 'built' && newBuilt !== sl.built) {
-      updates.built = newBuilt;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      onUpdateStock(sku, updates);
+    // Always send both total and built together to satisfy DB constraint (built <= total)
+    if (newTotal !== sl.total || newBuilt !== sl.built) {
+      onUpdateStock(sku, { total: newTotal, built: newBuilt });
     }
   };
 
@@ -172,8 +170,8 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
                       type="number"
                       value={editValues[sku]?.total ?? ''}
                       onChange={e => updateEditValue(sku, 'total', e.target.value)}
-                      onBlur={() => handleFieldSave(sku, 'total')}
-                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku, 'total')}
+                      onBlur={() => handleFieldSave(sku)}
+                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku)}
                       className="w-20 text-right font-mono text-sm font-bold border border-[#DFE1E6] focus:border-[#2563EB] rounded px-2 py-1 outline-none transition-colors"
                       min={0}
                     />
@@ -184,8 +182,8 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
                       type="number"
                       value={editValues[sku]?.built ?? ''}
                       onChange={e => updateEditValue(sku, 'built', e.target.value)}
-                      onBlur={() => handleFieldSave(sku, 'built')}
-                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku, 'built')}
+                      onBlur={() => handleFieldSave(sku)}
+                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku)}
                       className="w-20 text-right font-mono text-sm font-bold border border-[#DFE1E6] focus:border-[#2563EB] rounded px-2 py-1 outline-none transition-colors"
                       min={0}
                       max={parseInt(editValues[sku]?.total) || 0}
