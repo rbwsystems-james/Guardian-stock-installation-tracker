@@ -1,49 +1,95 @@
 import React, { useState } from 'react';
+import { Pencil, Check } from 'lucide-react';
 import { SKU_CONFIG, SKU_KEYS } from './constants';
 
 export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) {
-  const [showTotals, setShowTotals] = useState(false);
-  const [editingBuilt, setEditingBuilt] = useState(null);
-  const [editVal, setEditVal] = useState('');
-  const [editingTotal, setEditingTotal] = useState(null);
-  const [editTotalVal, setEditTotalVal] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editValues, setEditValues] = useState({});
 
   const { committed, spare, inbound } = metrics;
 
-  const handleBuiltClick = (sku, current) => {
-    setEditingBuilt(sku);
-    setEditVal(String(current));
+  const enterEditMode = () => {
+    const values = {};
+    SKU_KEYS.forEach(sku => {
+      const sl = stockLevels.find(s => s.sku === sku) || { total: 0, built: 0 };
+      values[sku] = { total: String(sl.total), built: String(sl.built) };
+    });
+    setEditValues(values);
+    setEditing(true);
   };
 
-  const handleBuiltSave = (sku) => {
-    const sl = stockLevels.find(s => s.sku === sku);
-    const val = Math.max(0, Math.min(parseInt(editVal) || 0, sl?.total || 0));
-    onUpdateStock(sku, { built: val });
-    setEditingBuilt(null);
+  const exitEditMode = () => {
+    // Save all changes
+    SKU_KEYS.forEach(sku => {
+      const sl = stockLevels.find(s => s.sku === sku) || { total: 0, built: 0 };
+      const vals = editValues[sku];
+      if (!vals) return;
+
+      const newTotal = Math.max(0, parseInt(vals.total) || 0);
+      const newBuilt = Math.max(0, Math.min(parseInt(vals.built) || 0, newTotal));
+
+      if (newTotal !== sl.total || newBuilt !== sl.built) {
+        onUpdateStock(sku, { total: newTotal, built: newBuilt });
+      }
+    });
+    setEditing(false);
   };
 
-  const handleTotalSave = (sku) => {
-    const sl = stockLevels.find(s => s.sku === sku);
-    const val = Math.max(0, parseInt(editTotalVal) || 0);
-    const updates = { total: val };
-    if ((sl?.built || 0) > val) updates.built = val;
-    onUpdateStock(sku, updates);
-    setEditingTotal(null);
+  const updateEditValue = (sku, field, value) => {
+    setEditValues(prev => ({
+      ...prev,
+      [sku]: { ...prev[sku], [field]: value },
+    }));
+  };
+
+  const handleFieldSave = (sku, field) => {
+    const sl = stockLevels.find(s => s.sku === sku) || { total: 0, built: 0 };
+    const vals = editValues[sku];
+    if (!vals) return;
+
+    const newTotal = Math.max(0, parseInt(vals.total) || 0);
+    const newBuilt = Math.max(0, Math.min(parseInt(vals.built) || 0, newTotal));
+
+    // Auto-clamp built in the edit state if it exceeds total
+    if (newBuilt !== parseInt(vals.built)) {
+      updateEditValue(sku, 'built', String(newBuilt));
+    }
+
+    const updates = {};
+    if (field === 'total' && newTotal !== sl.total) {
+      updates.total = newTotal;
+      if (sl.built > newTotal) updates.built = newTotal;
+    }
+    if (field === 'built' && newBuilt !== sl.built) {
+      updates.built = newBuilt;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      onUpdateStock(sku, updates);
+    }
   };
 
   return (
     <div className="bg-white border border-[#DFE1E6] rounded-[10px] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#DFE1E6]">
         <h2 className="text-sm font-semibold text-[#1C2024]">Inventory & Build Status</h2>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-xs text-[#6E7781]">Show totals</span>
+        {editing ? (
           <button
-            onClick={() => setShowTotals(!showTotals)}
-            className={`relative w-8 h-[18px] rounded-full transition-colors ${showTotals ? 'bg-[#2563EB]' : 'bg-[#DFE1E6]'}`}
+            onClick={exitEditMode}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#059669] hover:bg-[#047857] rounded-md transition-colors"
           >
-            <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${showTotals ? 'left-[16px]' : 'left-[2px]'}`} />
+            <Check className="w-3 h-3" />
+            Done
           </button>
-        </label>
+        ) : (
+          <button
+            onClick={enterEditMode}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#6E7781] hover:text-[#1C2024] hover:bg-[#F4F5F7] rounded-md transition-colors"
+          >
+            <Pencil className="w-3 h-3" />
+            Edit Stock
+          </button>
+        )}
       </div>
 
       <div className="flex divide-x divide-[#DFE1E6]">
@@ -72,43 +118,24 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
                   <span className="text-sm font-medium text-[#1C2024]">{cfg.label}</span>
                   <span className="text-xs text-[#6E7781]">({cfg.short})</span>
                 </div>
-                {inb > 0 && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] font-medium">+{inb} inbound</span>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-[#9CA3AF]">Total: {sl.total}</span>
+                  {inb > 0 && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] font-medium">+{inb} inbound</span>
+                  )}
+                </div>
               </div>
 
               {/* Hero Numbers */}
               <div className="flex divide-x divide-[#DFE1E6] mb-4">
                 {[
-                  { label: 'BUILT', value: sl.built, editable: true },
+                  { label: 'BUILT', value: sl.built },
                   { label: 'COMMITTED', value: comm },
                   { label: 'SPARE', value: sp, spare: true },
                 ].map(item => (
                   <div key={item.label} className="flex-1 text-center px-2">
                     <div className="text-[9px] font-bold tracking-[0.1em] text-[#9CA3AF] mb-1">{item.label}</div>
-                    {item.editable && editingBuilt === sku ? (
-                      <input
-                        type="number"
-                        value={editVal}
-                        onChange={e => setEditVal(e.target.value)}
-                        onBlur={() => handleBuiltSave(sku)}
-                        onKeyDown={e => e.key === 'Enter' && handleBuiltSave(sku)}
-                        className="w-full text-center font-mono text-[28px] font-bold border-2 border-[#2563EB] rounded outline-none"
-                        style={{ color: cfg.color }}
-                        autoFocus
-                        min={0}
-                        max={sl.total}
-                      />
-                    ) : item.editable ? (
-                      <div
-                        className="font-mono text-[28px] font-bold cursor-pointer hover:opacity-70 transition-opacity"
-                        style={{ color: cfg.color }}
-                        onClick={() => handleBuiltClick(sku, sl.built)}
-                        title="Click to edit"
-                      >
-                        {sl.built}
-                      </div>
-                    ) : item.spare ? (
+                    {item.spare ? (
                       <div
                         className="font-mono text-[28px] font-bold"
                         style={{ color: sp > 0 ? '#059669' : sp === 0 ? '#D97706' : '#DC2626' }}
@@ -116,8 +143,10 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
                         {sp}
                       </div>
                     ) : (
-                      <div className={`font-mono text-[28px] font-bold ${comm > 0 ? 'text-[#1C2024]' : 'text-[#9CA3AF]'}`}>
-                        {comm}
+                      <div className={`font-mono text-[28px] font-bold ${item.value > 0 ? 'text-[#1C2024]' : 'text-[#9CA3AF]'}`}
+                        style={item.label === 'BUILT' ? { color: cfg.color } : undefined}
+                      >
+                        {item.value}
                       </div>
                     )}
                   </div>
@@ -131,40 +160,37 @@ export default function InventoryPanel({ stockLevels, metrics, onUpdateStock }) 
                 ))}
               </div>
               <div className="text-[10px] text-[#6E7781]">
-                {segments.map(s => s.label).join(' · ')}
+                {segments.map(s => s.label).join(' \u00B7 ')}
               </div>
 
-              {/* Totals detail */}
-              {showTotals && (
-                <div className="mt-3 p-3 bg-[#F8F9FA] rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-[#6E7781]">Total Stock</span>
-                    {editingTotal === sku ? (
-                      <input
-                        type="number"
-                        value={editTotalVal}
-                        onChange={e => setEditTotalVal(e.target.value)}
-                        onBlur={() => handleTotalSave(sku)}
-                        onKeyDown={e => e.key === 'Enter' && handleTotalSave(sku)}
-                        className="w-20 text-right font-mono text-sm font-bold border border-[#2563EB] rounded px-1 outline-none"
-                        autoFocus
-                        min={0}
-                      />
-                    ) : (
-                      <span
-                        className="font-mono text-sm font-bold text-[#1C2024] cursor-pointer hover:opacity-70"
-                        onClick={() => { setEditingTotal(sku); setEditTotalVal(String(sl.total)); }}
-                      >
-                        {sl.total}
-                      </span>
-                    )}
+              {/* Edit Fields */}
+              {editing && (
+                <div className="mt-3 p-3 bg-[#F8F9FA] rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-[#6E7781]">Total Stock</label>
+                    <input
+                      type="number"
+                      value={editValues[sku]?.total ?? ''}
+                      onChange={e => updateEditValue(sku, 'total', e.target.value)}
+                      onBlur={() => handleFieldSave(sku, 'total')}
+                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku, 'total')}
+                      className="w-20 text-right font-mono text-sm font-bold border border-[#DFE1E6] focus:border-[#2563EB] rounded px-2 py-1 outline-none transition-colors"
+                      min={0}
+                    />
                   </div>
-                  {inb > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#6E7781]">Inbound (on order)</span>
-                      <span className="font-mono text-sm text-[#2563EB] font-medium">{inb}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-[#6E7781]">Built</label>
+                    <input
+                      type="number"
+                      value={editValues[sku]?.built ?? ''}
+                      onChange={e => updateEditValue(sku, 'built', e.target.value)}
+                      onBlur={() => handleFieldSave(sku, 'built')}
+                      onKeyDown={e => e.key === 'Enter' && handleFieldSave(sku, 'built')}
+                      className="w-20 text-right font-mono text-sm font-bold border border-[#DFE1E6] focus:border-[#2563EB] rounded px-2 py-1 outline-none transition-colors"
+                      min={0}
+                      max={parseInt(editValues[sku]?.total) || 0}
+                    />
+                  </div>
                 </div>
               )}
             </div>
