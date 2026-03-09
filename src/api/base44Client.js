@@ -45,15 +45,15 @@ const toSnake = (obj) => {
 
 const toCamel = (obj) => {
   const map = {
-    survey_date: 'survey_date',
-    postage_date: 'postage_date',
-    install_date: 'install_date',
+    survey_date: 'surveyDate',
+    postage_date: 'postageDate',
+    install_date: 'installDate',
     units_sc: 'units_sc',
     units_gmu: 'units_gmu',
     units_cc: 'units_cc',
-    order_date: 'order_date',
-    expected_date: 'expected_date',
-    po_ref: 'po_ref',
+    order_date: 'orderDate',
+    expected_date: 'expectedDate',
+    po_ref: 'poRef',
     delivered_applied: 'delivered_applied',
     created_at: 'created_at',
     updated_at: 'updated_at',

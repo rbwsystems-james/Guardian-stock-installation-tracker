@@ -42,6 +42,7 @@ export default function Dashboard() {
       if (sl) return base44.entities.StockLevel.update(sl.id, data);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stockLevels'] }),
+    onError: (err) => console.error('Stock update failed:', err),
   });
 
   const createInstall = useMutation({
@@ -52,6 +53,7 @@ export default function Dashboard() {
   const updateInstall = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Install.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['installs'] }),
+    onError: (err) => console.error('Install update failed:', err),
   });
 
   const deleteInstall = useMutation({
