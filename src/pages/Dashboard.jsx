@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
@@ -13,20 +13,13 @@ import StockProjectionChart from '../components/guardian/StockProjectionChart';
 import PipelineTable from '../components/guardian/PipelineTable';
 import SupplierOrdersTab from '../components/guardian/SupplierOrdersTab';
 
-const DEFAULT_STOCK = [
-  { sku: 'sc', label: 'Site Controller', short: 'SC', total: 0, built: 0 },
-  { sku: 'gmu', label: 'GMUs', short: 'GMU', total: 0, built: 0 },
-  { sku: 'cc', label: 'Coin Counter Units', short: 'CC', total: 0, built: 0 },
-];
-
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('operations');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editInstall, setEditInstall] = useState(null);
   const queryClient = useQueryClient();
 
-  // Data queries
-  const { data: stockLevels = [], isLoading: stockLoading } = useQuery({
+  const { data: stockLevels = [] } = useQuery({
     queryKey: ['stockLevels'],
     queryFn: () => base44.entities.StockLevel.list(),
   });
@@ -41,20 +34,8 @@ export default function Dashboard() {
     queryFn: () => base44.entities.SupplierOrder.list(),
   });
 
-  // Auto-create stock levels if empty
-  useEffect(() => {
-    if (!stockLoading && stockLevels.length === 0) {
-      const init = async () => {
-        await base44.entities.StockLevel.bulkCreate(DEFAULT_STOCK);
-        queryClient.invalidateQueries({ queryKey: ['stockLevels'] });
-      };
-      init();
-    }
-  }, [stockLoading, stockLevels.length]);
-
   const metrics = useMemo(() => computeMetrics(stockLevels, installs, supplierOrders), [stockLevels, installs, supplierOrders]);
 
-  // Mutations
   const updateStock = useMutation({
     mutationFn: ({ sku, data }) => {
       const sl = stockLevels.find(s => s.sku === sku);
@@ -86,7 +67,6 @@ export default function Dashboard() {
   const updateOrderStatus = useMutation({
     mutationFn: async ({ order, newStatus }) => {
       await base44.entities.SupplierOrder.update(order.id, { status: newStatus });
-      // If delivered and not already applied, increment stock
       if (newStatus === 'Delivered' && !order.delivered_applied) {
         const sl = stockLevels.find(s => s.sku === order.sku);
         if (sl) {
@@ -121,10 +101,8 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#F4F5F7]" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
-      {/* Google Fonts */}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');`}</style>
 
-      {/* Header */}
       <header className="bg-white border-b border-[#DFE1E6] sticky top-0 z-40">
         <div className="max-w-[1400px] mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -148,10 +126,8 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-[1400px] mx-auto px-5 py-5 space-y-4">
-        {/* Summary Bar */}
         <SummaryBar metrics={metrics} installs={installs} supplierOrders={supplierOrders} />
 
-        {/* Tabs */}
         <div className="flex border-b border-[#DFE1E6]">
           {[
             { key: 'operations', label: 'Operations' },
@@ -174,7 +150,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Operations Tab */}
         {activeTab === 'operations' && (
           <div className="space-y-4">
             <InventoryPanel stockLevels={stockLevels} metrics={metrics} onUpdateStock={handleUpdateStock} />
@@ -205,7 +180,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Supplier Orders Tab */}
         {activeTab === 'suppliers' && (
           <SupplierOrdersTab
             orders={supplierOrders}
@@ -216,7 +190,6 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Slide-out edit panel */}
       <InstallSlideOut
         install={editInstall}
         onSave={(id, data) => updateInstall.mutate({ id, data })}
